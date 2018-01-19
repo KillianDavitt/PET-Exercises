@@ -8,7 +8,7 @@
 # $ py.test-2.7 -v Lab01Tests.py 
 
 ###########################
-# Group Members: TODO
+# Group Members: Killian Davitt, Amer Joudiah
 ###########################
 
 
@@ -86,10 +86,10 @@ def is_point_on_curve(a, b, p, x, y):
     assert (isinstance(x, Bn) and isinstance(y, Bn)) \
            or (x == None and y == None)
 
-    if x == None and y == None:
+    if x is None and y is None:
         return True
 
-    lhs = (y * y) % p
+    lhs = (y*y) % p
     rhs = (x*x*x + a*x + b) % p
     on_curve = (lhs == rhs)
 
@@ -108,11 +108,42 @@ def point_add(a, b, p, x0, y0, x1, y1):
     Return the point resulting from the addition. Raises an Exception if the points are equal.
     """
 
-    # ADD YOUR CODE BELOW
-    xr, yr = None, None
-    
-    return (xr, yr)
 
+    ## Curve: y^2 = x^3 + ax + b
+    
+    # ADD YOUR CODE BELOW
+    #assert isinstance(x0, Bn)
+    #assert isinstance(x1, Bn)
+    #assert isinstance(y0, Bn)
+    #assert isinstance(y1, Bn)
+    assert isinstance(p, Bn) and p > 0
+    assert Bn.is_prime(p)
+
+    
+    if (x0 is None) and (y0 is None):
+        if x1 is None and y1 is None:
+            return None, None
+        else:
+            return x1,y1
+    elif x1 is None and y1 is None:
+        return x0,y0
+
+    if x0 == x1 and y0 == y1:
+        raise Exception('EC Points must not be equal')
+
+
+    xr, yr = None, None
+
+
+    
+
+    try:
+        lam = ((y0 - y1) * (Bn.mod_inverse((x0 - x1),p))) % p
+        xr = (lam**2 - x0 - x1) % p
+        yr = (lam * (x0 - xr) - y0) % p
+        return (xr, yr)
+    except Exception:
+        return (None, None)
 def point_double(a, b, p, x, y):
     """Define "doubling" an EC point.
      A special case, when a point needs to be added to itself.
@@ -124,10 +155,16 @@ def point_double(a, b, p, x, y):
 
     Returns the point representing the double of the input (x, y).
     """  
-
+    assert Bn.is_prime(p)
+    
+    if x is None and y is None:
+        return (None, None)
+    
     # ADD YOUR CODE BELOW
     xr, yr = None, None
-
+    lam = ((3 * (x*x) + a) * Bn.mod_inverse((2 * y),p)) % p
+    xr = ((lam * lam) -2 * x) % p 
+    yr = (lam * (x-xr) - y ) % p
     return xr, yr
 
 def point_scalar_multiplication_double_and_add(a, b, p, x, y, scalar):
@@ -138,7 +175,7 @@ def point_scalar_multiplication_double_and_add(a, b, p, x, y, scalar):
     Reminder of Double and Multiply algorithm: r * P
         Q = infinity
         for i = 0 to num_bits(P)-1
-            if bit i of r == 1 then
+            if bit i of r == 1 then2
                 Q = Q + P
             P = 2 * P
         return Q
@@ -148,8 +185,9 @@ def point_scalar_multiplication_double_and_add(a, b, p, x, y, scalar):
     P = (x, y)
 
     for i in range(scalar.num_bits()):
-        pass ## ADD YOUR CODE HERE
-
+        if scalar.is_bit_set(i):
+            Q = point_add(a, b, p, P[0], P[1], Q[0], Q[1])
+        P = point_double(a,b,p,P[0],P[1])
     return Q
 
 def point_scalar_multiplication_montgomerry_ladder(a, b, p, x, y, scalar):
@@ -174,7 +212,12 @@ def point_scalar_multiplication_montgomerry_ladder(a, b, p, x, y, scalar):
     R1 = (x, y)
 
     for i in reversed(range(0,scalar.num_bits())):
-        pass ## ADD YOUR CODE HERE
+        if not scalar.is_bit_set(i):
+            R1 = point_add(a,b,p,R0[0], R0[1],R1[0],R1[1])
+            R0 = point_double(a,b,p,R0[0],R0[1])
+        else:
+            R0 = point_add(a,b,p,R0[0], R0[1],R1[0],R1[1])
+            R1 = point_double(a,b,p,R1[0],R1[1])
 
     return R0
 
