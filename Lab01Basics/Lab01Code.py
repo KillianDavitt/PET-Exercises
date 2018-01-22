@@ -18,6 +18,7 @@
 #           be imported.
 
 import petlib
+import time
 
 #####################################################
 # TASK 2 -- Symmetric encryption using AES-GCM 
@@ -320,4 +321,27 @@ def test_fails():
 #           - Fix one implementation to not leak information.
 
 def time_scalar_mul():
-    pass
+    G = EcGroup(713) # NIST curve
+    d = G.parameters()
+    a, b, p = d["a"], d["b"], d["p"]
+    g = G.generator()
+    gx0, gy0 = g.get_affine()
+    r = G.order().random()
+
+    gx2, gy2 = (r*g).get_affine()
+
+    t1 = time.clock()
+    x2, y2 = point_scalar_multiplication_double_and_add(a, b, p, gx0, gy0, r)
+    t2 = time.clock()
+    runtime = t2-t1
+    print(runtime)
+
+
+    t1 = time.clock()
+    x2, y2 = point_scalar_multiplication_double_and_add(a, b, p, gx0, gy0, r)
+    t2 = time.clock()
+    runtime = t2-t1
+    print(runtime)
+    
+
+time_scalar_mul()
