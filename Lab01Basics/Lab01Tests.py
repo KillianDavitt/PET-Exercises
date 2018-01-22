@@ -331,3 +331,13 @@ def test_check_fail():
 @pytest.mark.task5
 def test_key_gen():
     G, priv, pub = dh_get_key()
+
+@pytest.mark.task5
+def test_dh_encrypt():
+    from os import urandom
+    G, priv, pub = dh_get_key()
+    message = b"Hello World!"
+    ciphertext, pub_enc = dh_encrypt(pub, message)
+    assert len(ciphertext) == len(message)
+   #assert ecdsa_verify(G, pub_enc, message, sig)
+ 

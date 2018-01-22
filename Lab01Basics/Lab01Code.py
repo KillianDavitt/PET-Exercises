@@ -47,7 +47,6 @@ def encrypt_message(K, message):
 
 def decrypt_message(K, iv, ciphertext, tag):
     """ Decrypt a cipher text under a key K 
-
         In case the decryption fails, throw an exception.
     """
     ## YOUR CODE HERE
@@ -145,6 +144,7 @@ def point_add(a, b, p, x0, y0, x1, y1):
         return (xr, yr)
     except Exception:
         return (None, None)
+
 def point_double(a, b, p, x, y):
     """Define "doubling" an EC point.
      A special case, when a point needs to be added to itself.
@@ -176,7 +176,7 @@ def point_scalar_multiplication_double_and_add(a, b, p, x, y, scalar):
     Reminder of Double and Multiply algorithm: r * P
         Q = infinity
         for i = 0 to num_bits(P)-1
-            if bit i of r == 1 then2
+            if bit i of r == 1 then
                 Q = Q + P
             P = 2 * P
         return Q
@@ -234,6 +234,7 @@ def point_scalar_multiplication_montgomerry_ladder(a, b, p, x, y, scalar):
 from hashlib import sha256
 from petlib.ec import EcGroup
 from petlib.ecdsa import do_ecdsa_sign, do_ecdsa_verify
+from hashlib import sha1
 
 def ecdsa_key_gen():
     """ Returns an EC group, a random private key for signing 
@@ -247,17 +248,18 @@ def ecdsa_key_gen():
 def ecdsa_sign(G, priv_sign, message):
     """ Sign the SHA256 digest of the message using ECDSA and return a signature """
     plaintext =  message.encode("utf8")
-
     ## YOUR CODE HERE
-
+    digest = sha1(plaintext).digest()
+    sig = do_ecdsa_sign(G, priv_sign, digest)
     return sig
+
 
 def ecdsa_verify(G, pub_verify, message, sig):
     """ Verify the ECDSA signature on the message """
     plaintext =  message.encode("utf8")
-
     ## YOUR CODE HERE
-
+    digest = sha1(plaintext).digest()
+    res = do_ecdsa_verify(G, pub_verify, sig, digest)
     return res
 
 #####################################################
@@ -284,9 +286,17 @@ def dh_encrypt(pub, message, aliceSig = None):
         - Use the shared key to AES_GCM encrypt the message.
         - Optionally: sign the message with Alice's key.
     """
-    
     ## YOUR CODE HERE
-    pass
+    G, priv_dec, pub_enc =dh_get_key()
+    shared_key = pub.pt_mul(priv_dec)
+    #change it to bits using export()
+    shared_key = shared_key.export()
+    digest = sha1(message).digest() #too big
+    digest = digest[:16]
+    iv,ciphertext,tag = encrypt_message(digest,message)
+    #sig = do_ecdsa_sign(G, priv_sign, digest)
+    #return (ciphertext,pub_enc,sig)
+    return (ciphertext,pub_enc)
 
 def dh_decrypt(priv, ciphertext, aliceVer = None):
     """ Decrypt a received message encrypted using your public key, 
@@ -294,7 +304,19 @@ def dh_decrypt(priv, ciphertext, aliceVer = None):
     the message came from Alice using her verification key."""
     
     ## YOUR CODE HERE
-    pass
+    ''' res = do_ecdsa_verify(G, pub_verify, sig, digest)
+    return res'''
+'''
+    G,priv_dec,pub_enc =dh_get_key()
+    shared_key = pub_enc ** priv
+    #change it to bits using export()
+    shared_key = shared_key.export()
+    digest = sha1(plaintext).digest() #too big
+    digest= digest[:16] 
+    ciphertext = decrypt_message(digest,message)
+    sig = do_ecdsa_sign(G, priv_sign, digest)
+    return (ciphertext,pub_enc,sig)
+'''
 
 ## NOTE: populate those (or more) tests
 #  ensure they run using the "py.test filename" command.
@@ -302,7 +324,8 @@ def dh_decrypt(priv, ciphertext, aliceVer = None):
 #  $ py.test-2.7 --cov-report html --cov Lab01Code Lab01Code.py 
 
 def test_encrypt():
-    assert False
+ assert False
+
 
 def test_decrypt():
     assert False
