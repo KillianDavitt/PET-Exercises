@@ -18,6 +18,7 @@
 #           be imported.
 
 import petlib
+import time
 
 #####################################################
 # TASK 2 -- Symmetric encryption using AES-GCM 
@@ -235,6 +236,7 @@ def point_scalar_multiplication_montgomerry_ladder(a, b, p, x, y, scalar):
 from hashlib import sha256
 from petlib.ec import EcGroup
 from petlib.ecdsa import do_ecdsa_sign, do_ecdsa_verify
+from hashlib import sha1
 
 
 def ecdsa_key_gen():
@@ -250,7 +252,10 @@ def ecdsa_sign(G, priv_sign, message):
     """ Sign the SHA256 digest of the message using ECDSA and return a signature """
     plaintext =  message.encode("utf8")
     ## YOUR CODE HERE
+
     digest = sha256(plaintext).digest()
+
+
     sig = do_ecdsa_sign(G, priv_sign, digest)
     return sig
 
@@ -260,6 +265,7 @@ def ecdsa_verify(G, pub_verify, message, sig):
     plaintext =  message.encode("utf8")
     ## YOUR CODE HERE
     digest = sha256(plaintext).digest()
+
     res = do_ecdsa_verify(G, pub_verify, sig, digest)
     return res
 
@@ -289,6 +295,7 @@ def dh_encrypt(pub, message, aliceSig = None):
     """
     ## YOUR CODE HERE
     G, priv_dec, pub_enc =dh_get_key()
+
     
     shared_key = pub.pt_mul(priv_dec)
     #change it to bits using export()
@@ -299,12 +306,15 @@ def dh_encrypt(pub, message, aliceSig = None):
     signature = ecdsa_sign(G, priv_dec, message)
     return (iv, ciphertext, tag, pub_enc, signature)
 
+
+
 def dh_decrypt(priv, ciphertext, aliceVer = None):
     """ Decrypt a received message encrypted using your public key, 
     of which the private key is provided. Optionally verify 
     the message came from Alice using her verification key."""
     
     ## YOUR CODE HERE
+
     shared_key = ciphertext[3].pt_mul(priv)
     #change it to bits using export()
     shared_key = shared_key.export()
@@ -326,6 +336,20 @@ def dh_decrypt(priv, ciphertext, aliceVer = None):
 
 
 
+    ''' res = do_ecdsa_verify(G, pub_verify, sig, digest)
+    return res'''
+'''
+    G,priv_dec,pub_enc =dh_get_key()
+    shared_key = pub_enc ** priv
+    #change it to bits using export()
+    shared_key = shared_key.export()
+    digest = sha1(plaintext).digest() #too big
+    digest= digest[:16] 
+    ciphertext = decrypt_message(digest,message)
+    sig = do_ecdsa_sign(G, priv_sign, digest)
+    return (ciphertext,pub_enc,sig)
+'''
+
 ## NOTE: populate those (or more) tests
 #  ensure they run using the "py.test filename" command.
 #  What is your test coverage? Where is it missing cases?
@@ -333,6 +357,7 @@ def dh_decrypt(priv, ciphertext, aliceVer = None):
 
 '''
 def test_encrypt():
+<<<<<<< HEAD
     from os import urandom
 
     G, priv, pub = dh_get_key()
@@ -343,6 +368,10 @@ def test_encrypt():
     assert len(tag) == 16
     assert len(ciphertext) == len(message)
     assert ecdsa_verify(G, pub_enc, message, signature)
+=======
+ assert False
+
+>>>>>>> 902182e2a4fbf97925316421cd0e86f5d1d9fc19
 
 def test_decrypt():
     from os import urandom
@@ -377,4 +406,27 @@ def test_fails():
 #           - Fix one implementation to not leak information.
 
 def time_scalar_mul():
-    pass
+    G = EcGroup(713) # NIST curve
+    d = G.parameters()
+    a, b, p = d["a"], d["b"], d["p"]
+    g = G.generator()
+    gx0, gy0 = g.get_affine()
+    r = G.order().random()
+
+    gx2, gy2 = (r*g).get_affine()
+
+    t1 = time.clock()
+    x2, y2 = point_scalar_multiplication_double_and_add(a, b, p, gx0, gy0, r)
+    t2 = time.clock()
+    runtime = t2-t1
+    print(runtime)
+
+
+    t1 = time.clock()
+    x2, y2 = point_scalar_multiplication_double_and_add(a, b, p, gx0, gy0, r)
+    t2 = time.clock()
+    runtime = t2-t1
+    print(runtime)
+    
+
+time_scalar_mul()

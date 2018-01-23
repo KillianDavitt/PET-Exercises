@@ -335,9 +335,59 @@ def test_key_gen():
 @pytest.mark.task5
 def test_dh_encrypt():
     from os import urandom
+
     G, priv, pub = dh_get_key()
     message = b"Hello World!"
-    ciphertext, pub_enc = dh_encrypt(pub, message)
+    iv , ciphertext, tag, pub_enc, signature = dh_encrypt(pub, message)
+
+    assert len(iv) == 16
+    assert len(tag) == 16
     assert len(ciphertext) == len(message)
-   #assert ecdsa_verify(G, pub_enc, message, sig)
- 
+    assert ecdsa_verify(G, pub_enc, message, signature)
+
+
+@pytest.mark.task5
+def test_dh_decrypt():
+    from os import urandom
+
+    G, priv, pub = dh_get_key()
+    message = b"Hello World!"
+
+    iv ,ciphertext, tag, pub_enc, signature = dh_encrypt(pub, message)
+    ciphertext = (iv, ciphertext, tag, pub_enc, signature, G)
+    decrypted_message,signature  = dh_decrypt(priv, ciphertext)
+
+    assert len(iv) == 16
+    assert len(tag) == 16
+    assert message == decrypted_message
+    assert signature
+
+
+@pytest.mark.task5
+def test_fails():
+    from pytest import raises
+
+    from os import urandom
+    G, priv, pub = dh_get_key()
+    message = b"Hello World!"
+
+
+    iv , ciphertext, tag, pub_enc, signature = dh_encrypt(pub, message)
+
+'''
+    with raises(Exception) as excinfo:
+        decrypt_message(K, iv, urandom(len(ciphertext)), tag)
+    assert 'decryption failed' in str(excinfo.value)
+
+    with raises(Exception) as excinfo:
+        decrypt_message(K, iv, ciphertext, urandom(len(tag)))
+    assert 'decryption failed' in str(excinfo.value)
+
+    with raises(Exception) as excinfo:
+        decrypt_message(K, urandom(len(iv)), ciphertext, tag)
+    assert 'decryption failed' in str(excinfo.value)
+
+    with raises(Exception) as excinfo:
+        decrypt_message(urandom(len(K)), iv, ciphertext, tag)
+    assert 'decryption failed' in str(excinfo.value)
+    '''
