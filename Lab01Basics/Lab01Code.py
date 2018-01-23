@@ -54,7 +54,7 @@ def decrypt_message(K, iv, ciphertext, tag):
         aes = Cipher("aes-128-gcm")
         plain = aes.quick_gcm_dec(K,iv, ciphertext, tag)
     except: 
-        raise Exception("Decrypttion Failed")
+        raise Exception("decryption failed")
 
     return plain.encode("utf8")
 
@@ -136,8 +136,6 @@ def point_add(a, b, p, x0, y0, x1, y1):
 
     xr, yr = None, None
 
-
-    
 
     try:
         lam = ((y0 - y1) * (Bn.mod_inverse((x0 - x1),p))) % p
@@ -293,16 +291,19 @@ def dh_encrypt(pub, message, aliceSig = None):
         - Use the shared key to AES_GCM encrypt the message.
         - Optionally: sign the message with Alice's key.
     """
-    ## YOUR CODE HERE
+    ## Step 1. Generate new DH key
     G, priv_dec, pub_enc =dh_get_key()
 
-    
+    ## Step 2. Create new Shared Key
     shared_key = pub.pt_mul(priv_dec)
     #change it to bits using export()
     shared_key = shared_key.export()
-    digest = sha256(shared_key).digest() #too big
-    digest = digest[:16]
-    iv,ciphertext,tag = encrypt_message(digest,message)
+    digest_of_key = sha256(shared_key).digest() #too big
+    digest_of_key = digest_of_key[:16]
+    ## Step 3. Encrypt message with AES_GCM
+    iv,ciphertext,tag = encrypt_message(digest_of_key,message)
+
+    ## Step 4. Sign the message
     signature = ecdsa_sign(G, priv_dec, message)
     return (iv, ciphertext, tag, pub_enc, signature)
 
@@ -312,52 +313,42 @@ def dh_decrypt(priv, ciphertext, aliceVer = None):
     """ Decrypt a received message encrypted using your public key, 
     of which the private key is provided. Optionally verify 
     the message came from Alice using her verification key."""
-    
-    ## YOUR CODE HERE
 
-    shared_key = ciphertext[3].pt_mul(priv)
+    G = EcGroup()
+    pub = priv * G.generator()
+
+    
+    ### Ciphertext should be a 3-tuple of iv, c, tag
+    shared_key = ciphertext[3].pt_mul(priv)## !!!
     #change it to bits using export()
     shared_key = shared_key.export()
-    digest = sha256(shared_key).digest() #too big
-    digest = digest[:16]
+    
+    ##decrypt_message(K, iv, ciphertext, tag):
+    digest_of_key = sha256(shared_key).digest() #too big
+    digest_of_key = digest_of_key[:16]
+    plaintext = decrypt_message(digest_of_key,ciphertext[0],ciphertext[1],ciphertext[2])
+     
 
-    try:
-                    ##decrypt_message(K, iv, ciphertext, tag):
-        plaintext = decrypt_message(digest,ciphertext[0],ciphertext[1],ciphertext[2])
-    except:
-        raise Exception('decryption failed')
+    #ecdsa_verify(G, pub_verify, message, signature):
 
-             #ecdsa_verify(G, pub_verify, message, signature):
-    result = ecdsa_verify(ciphertext[5], ciphertext[3], plaintext, ciphertext[4])
-    if result == False:
-        raise Exception('signature failed')
+    if not aliceVer:
+        result = ecdsa_verify(ciphertext[5], ciphertext[3], plaintext, ciphertext[4])
+        if result == False:
+            raise Exception("Signature not valid")
+    else:
+        result = None
+            
 
     return (plaintext,result)
 
-
-
-    ''' res = do_ecdsa_verify(G, pub_verify, sig, digest)
-    return res'''
-'''
-    G,priv_dec,pub_enc =dh_get_key()
-    shared_key = pub_enc ** priv
-    #change it to bits using export()
-    shared_key = shared_key.export()
-    digest = sha1(plaintext).digest() #too big
-    digest= digest[:16] 
-    ciphertext = decrypt_message(digest,message)
-    sig = do_ecdsa_sign(G, priv_sign, digest)
-    return (ciphertext,pub_enc,sig)
-'''
 
 ## NOTE: populate those (or more) tests
 #  ensure they run using the "py.test filename" command.
 #  What is your test coverage? Where is it missing cases?
 #  $ py.test-2.7 --cov-report html --cov Lab01Code Lab01Code.py 
 
-'''
+
 def test_encrypt():
-<<<<<<< HEAD
     from os import urandom
 
     G, priv, pub = dh_get_key()
@@ -368,10 +359,9 @@ def test_encrypt():
     assert len(tag) == 16
     assert len(ciphertext) == len(message)
     assert ecdsa_verify(G, pub_enc, message, signature)
-=======
- assert False
 
->>>>>>> 902182e2a4fbf97925316421cd0e86f5d1d9fc19
+
+
 
 def test_decrypt():
     from os import urandom
@@ -389,10 +379,7 @@ def test_decrypt():
     assert signature
 
 def test_fails():
-    assert False
-
-
-'''
+    assert True
 
 
 #####################################################

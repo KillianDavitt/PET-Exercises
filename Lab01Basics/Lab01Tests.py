@@ -371,23 +371,29 @@ def test_fails():
     G, priv, pub = dh_get_key()
     message = b"Hello World!"
 
-
     iv , ciphertext, tag, pub_enc, signature = dh_encrypt(pub, message)
 
-'''
+
     with raises(Exception) as excinfo:
-        decrypt_message(K, iv, urandom(len(ciphertext)), tag)
+        # Add 7 to the private key to ensure it's invalid
+        dh_decrypt(priv+7, (iv, ciphertext, tag, pub_enc,
+                                 signature, G))
+    assert 'decryption failed' in str(excinfo.value)
+ 
+    with raises(Exception) as excinfo:
+        dh_decrypt(priv, ([chr(ord(x)+3) for x in iv], ciphertext, tag, pub_enc, signature,G))
     assert 'decryption failed' in str(excinfo.value)
 
     with raises(Exception) as excinfo:
-        decrypt_message(K, iv, ciphertext, urandom(len(tag)))
+        dh_decrypt(priv, (iv, ciphertext+"d", tag, pub_enc, signature,G))
     assert 'decryption failed' in str(excinfo.value)
 
     with raises(Exception) as excinfo:
-        decrypt_message(K, urandom(len(iv)), ciphertext, tag)
-    assert 'decryption failed' in str(excinfo.value)
+        dh_decrypt(priv, (iv, ciphertext, tag, pub_enc+88, signature,G))
+    assert 'EC exception' in str(excinfo.value)
 
-    with raises(Exception) as excinfo:
-        decrypt_message(urandom(len(K)), iv, ciphertext, tag)
+    '''with raises(Exception) as excinfo:
+        dh_decrypt(priv, (iv, ciphertext, tag, pub_enc, signature+222,G))
     assert 'decryption failed' in str(excinfo.value)
     '''
+
