@@ -49,9 +49,11 @@ def decrypt_message(K, iv, ciphertext, tag):
         In case the decryption fails, throw an exception.
     """
     ## YOUR CODE HERE
-    aes = Cipher("aes-128-gcm")
-    plain = aes.quick_gcm_dec(K,iv, ciphertext, tag)
-
+    try:
+        aes = Cipher("aes-128-gcm")
+        plain = aes.quick_gcm_dec(K,iv, ciphertext, tag)
+    except: 
+        raise Exception("Decrypttion Failed")
 
     return plain.encode("utf8")
 
@@ -233,7 +235,7 @@ def point_scalar_multiplication_montgomerry_ladder(a, b, p, x, y, scalar):
 from hashlib import sha256
 from petlib.ec import EcGroup
 from petlib.ecdsa import do_ecdsa_sign, do_ecdsa_verify
-from hashlib import sha1
+
 
 def ecdsa_key_gen():
     """ Returns an EC group, a random private key for signing 
@@ -248,7 +250,7 @@ def ecdsa_sign(G, priv_sign, message):
     """ Sign the SHA256 digest of the message using ECDSA and return a signature """
     plaintext =  message.encode("utf8")
     ## YOUR CODE HERE
-    digest = sha1(plaintext).digest()
+    digest = sha256(plaintext).digest()
     sig = do_ecdsa_sign(G, priv_sign, digest)
     return sig
 
@@ -257,7 +259,7 @@ def ecdsa_verify(G, pub_verify, message, sig):
     """ Verify the ECDSA signature on the message """
     plaintext =  message.encode("utf8")
     ## YOUR CODE HERE
-    digest = sha1(plaintext).digest()
+    digest = sha256(plaintext).digest()
     res = do_ecdsa_verify(G, pub_verify, sig, digest)
     return res
 
@@ -287,15 +289,15 @@ def dh_encrypt(pub, message, aliceSig = None):
     """
     ## YOUR CODE HERE
     G, priv_dec, pub_enc =dh_get_key()
+    
     shared_key = pub.pt_mul(priv_dec)
     #change it to bits using export()
     shared_key = shared_key.export()
-    digest = sha1(message).digest() #too big
+    digest = sha256(shared_key).digest() #too big
     digest = digest[:16]
     iv,ciphertext,tag = encrypt_message(digest,message)
-    #sig = do_ecdsa_sign(G, priv_sign, digest)
-    #return (ciphertext,pub_enc,sig)
-    return (ciphertext,pub_enc)
+    signature = ecdsa_sign(G, priv_dec, message)
+    return (iv, ciphertext, tag, pub_enc, signature)
 
 def dh_decrypt(priv, ciphertext, aliceVer = None):
     """ Decrypt a received message encrypted using your public key, 
@@ -303,34 +305,66 @@ def dh_decrypt(priv, ciphertext, aliceVer = None):
     the message came from Alice using her verification key."""
     
     ## YOUR CODE HERE
-    ''' res = do_ecdsa_verify(G, pub_verify, sig, digest)
-    return res'''
-'''
-    G,priv_dec,pub_enc =dh_get_key()
-    shared_key = pub_enc ** priv
+    shared_key = ciphertext[3].pt_mul(priv)
     #change it to bits using export()
     shared_key = shared_key.export()
-    digest = sha1(plaintext).digest() #too big
-    digest= digest[:16] 
-    ciphertext = decrypt_message(digest,message)
-    sig = do_ecdsa_sign(G, priv_sign, digest)
-    return (ciphertext,pub_enc,sig)
-'''
+    digest = sha256(shared_key).digest() #too big
+    digest = digest[:16]
+
+    try:
+                    ##decrypt_message(K, iv, ciphertext, tag):
+        plaintext = decrypt_message(digest,ciphertext[0],ciphertext[1],ciphertext[2])
+    except:
+        raise Exception('decryption failed')
+
+             #ecdsa_verify(G, pub_verify, message, signature):
+    result = ecdsa_verify(ciphertext[5], ciphertext[3], plaintext, ciphertext[4])
+    if result == False:
+        raise Exception('signature failed')
+
+    return (plaintext,result)
+
+
 
 ## NOTE: populate those (or more) tests
 #  ensure they run using the "py.test filename" command.
 #  What is your test coverage? Where is it missing cases?
 #  $ py.test-2.7 --cov-report html --cov Lab01Code Lab01Code.py 
 
+'''
 def test_encrypt():
- assert False
+    from os import urandom
 
+    G, priv, pub = dh_get_key()
+    message = b"Hello World!"
+    iv , ciphertext, tag, pub_enc, signature = dh_encrypt(pub, message)
+
+    assert len(iv) == 16
+    assert len(tag) == 16
+    assert len(ciphertext) == len(message)
+    assert ecdsa_verify(G, pub_enc, message, signature)
 
 def test_decrypt():
-    assert False
+    from os import urandom
+
+    G, priv, pub = dh_get_key()
+    message = b"Hello World!"
+
+    iv ,ciphertext, tag, pub_enc, signature = dh_encrypt(pub, message)
+    ciphertext = (iv, ciphertext, tag, pub_enc, signature, G)
+    decrypted_message,signature  = dh_decrypt(priv, ciphertext)
+
+    assert len(iv) == 16
+    assert len(tag) == 16
+    assert message == decrypted_message
+    assert signature
 
 def test_fails():
     assert False
+
+
+'''
+
 
 #####################################################
 # TASK 6 -- Time EC scalar multiplication
