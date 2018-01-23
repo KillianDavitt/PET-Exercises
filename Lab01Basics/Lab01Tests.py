@@ -337,13 +337,16 @@ def test_dh_encrypt():
     from os import urandom
 
     G, priv, pub = dh_get_key()
+    sig_key = G.order().random()
+    ver_key = sig_key * G.generator()
     message = b"Hello World!"
-    iv , ciphertext, tag, pub_enc, signature = dh_encrypt(pub, message)
+    iv , ciphertext, tag, pub_enc, signature = dh_encrypt(pub,
+                                                          message, sig_key)
 
     assert len(iv) == 16
     assert len(tag) == 16
     assert len(ciphertext) == len(message)
-    assert ecdsa_verify(G, pub_enc, message, signature)
+    assert ecdsa_verify(G, ver_key, message, signature)
 
 
 @pytest.mark.task5
@@ -351,11 +354,14 @@ def test_dh_decrypt():
     from os import urandom
 
     G, priv, pub = dh_get_key()
+    sig_key = G.order().random()
+    ver_key = sig_key * G.generator()
     message = b"Hello World!"
 
-    iv ,ciphertext, tag, pub_enc, signature = dh_encrypt(pub, message)
+    iv ,ciphertext, tag, pub_enc, signature = dh_encrypt(pub, message,
+                                                         sig_key)
     ciphertext = (iv, ciphertext, tag, pub_enc, signature, G)
-    decrypted_message,signature  = dh_decrypt(priv, ciphertext)
+    decrypted_message,signature  = dh_decrypt(priv, ciphertext, ver_key)
 
     assert len(iv) == 16
     assert len(tag) == 16
@@ -369,31 +375,44 @@ def test_fails():
 
     from os import urandom
     G, priv, pub = dh_get_key()
+    sig_key = G.order().random()
+    ver_key = sig_key * G.generator()
     message = b"Hello World!"
 
-    iv , ciphertext, tag, pub_enc, signature = dh_encrypt(pub, message)
-
+    iv , ciphertext, tag, pub_enc, signature = dh_encrypt(pub,
+                                                          message, sig_key)
+    print type(signature)
 
     with raises(Exception) as excinfo:
         # Add 7 to the private key to ensure it's invalid
-        dh_decrypt(priv+7, (iv, ciphertext, tag, pub_enc,
-                                 signature, G))
+        dh_decrypt(priv+7, (iv, ciphertext, tag, pub_enc, signature), ver_key)
     assert 'decryption failed' in str(excinfo.value)
  
     with raises(Exception) as excinfo:
-        dh_decrypt(priv, ([chr(ord(x)+3) for x in iv], ciphertext, tag, pub_enc, signature,G))
+        ## Adding arbritrary values to iv to ensure decryption fails
+        dh_decrypt(priv, ([chr(ord(x)+3) for x in iv if ord(x)<200],
+                          ciphertext, tag, pub_enc, signature), ver_key)
     assert 'decryption failed' in str(excinfo.value)
 
     with raises(Exception) as excinfo:
-        dh_decrypt(priv, (iv, ciphertext+"d", tag, pub_enc, signature,G))
+        ## Concat to ciphertext to ensure decryption fails
+        dh_decrypt(priv, (iv, ciphertext+"d", tag, pub_enc,
+                          signature), ver_key)
     assert 'decryption failed' in str(excinfo.value)
 
+    
     with raises(Exception) as excinfo:
-        dh_decrypt(priv, (iv, ciphertext, tag, pub_enc+88, signature,G))
+        ## Add to public key to ensure decryption fails
+        dh_decrypt(priv, (iv, ciphertext, tag, pub_enc+88, signature),
+ver_key        )
     assert 'EC exception' in str(excinfo.value)
 
-    '''with raises(Exception) as excinfo:
-        dh_decrypt(priv, (iv, ciphertext, tag, pub_enc, signature+222,G))
-    assert 'decryption failed' in str(excinfo.value)
-    '''
+
+    print type(signature)
+    with raises(Exception) as excinfo:
+        ## Adding arbritrary values to signature to make verification fail
+        dh_decrypt(priv, (iv, ciphertext, tag, pub_enc,
+                          (signature[0]+44, signature[1]-44)), ver_key)
+    assert 'Signature not valid' in str(excinfo.value)
+    
 

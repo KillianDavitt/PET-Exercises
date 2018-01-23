@@ -304,41 +304,40 @@ def dh_encrypt(pub, message, aliceSig = None):
     iv,ciphertext,tag = encrypt_message(digest_of_key,message)
 
     ## Step 4. Sign the message
-    signature = ecdsa_sign(G, priv_dec, message)
+    signature = None
+    if aliceSig is not None:
+        signature = ecdsa_sign(G, aliceSig, message)
+
     return (iv, ciphertext, tag, pub_enc, signature)
 
 
 
-def dh_decrypt(priv, ciphertext, aliceVer = None):
+def dh_decrypt(priv, ciphertext_and_pub, aliceVer = None):
     """ Decrypt a received message encrypted using your public key, 
     of which the private key is provided. Optionally verify 
     the message came from Alice using her verification key."""
 
     G = EcGroup()
-    pub = priv * G.generator()
-
     
-    ### Ciphertext should be a 3-tuple of iv, c, tag
-    shared_key = ciphertext[3].pt_mul(priv)## !!!
+    # Ciphertext_and_pub should be a 5-tuple of iv, c, tag, public_key, signature 
+    shared_key = ciphertext_and_pub[3].pt_mul(priv)
     #change it to bits using export()
     shared_key = shared_key.export()
     
     ##decrypt_message(K, iv, ciphertext, tag):
     digest_of_key = sha256(shared_key).digest() #too big
     digest_of_key = digest_of_key[:16]
-    plaintext = decrypt_message(digest_of_key,ciphertext[0],ciphertext[1],ciphertext[2])
+    plaintext = decrypt_message(digest_of_key,ciphertext_and_pub[0],ciphertext_and_pub[1],ciphertext_and_pub[2])
      
 
     #ecdsa_verify(G, pub_verify, message, signature):
 
-    if not aliceVer:
-        result = ecdsa_verify(ciphertext[5], ciphertext[3], plaintext, ciphertext[4])
+    if aliceVer is not None: 
+        result = ecdsa_verify(G, aliceVer, plaintext, ciphertext_and_pub[4])
         if result == False:
             raise Exception("Signature not valid")
     else:
         result = None
-            
-
     return (plaintext,result)
 
 
@@ -351,14 +350,19 @@ def dh_decrypt(priv, ciphertext, aliceVer = None):
 def test_encrypt():
     from os import urandom
 
+
+    
     G, priv, pub = dh_get_key()
+    sig_key = G.order().random()
+    ver_key = sig_key * G.generator()
     message = b"Hello World!"
-    iv , ciphertext, tag, pub_enc, signature = dh_encrypt(pub, message)
+    iv , ciphertext, tag, pub_enc, signature = dh_encrypt(pub,
+                                                          message, sig_key)
 
     assert len(iv) == 16
     assert len(tag) == 16
     assert len(ciphertext) == len(message)
-    assert ecdsa_verify(G, pub_enc, message, signature)
+    assert ecdsa_verify(G, ver_key, message, signature)
 
 
 
@@ -367,11 +371,16 @@ def test_decrypt():
     from os import urandom
 
     G, priv, pub = dh_get_key()
+    sig_key = G.order().random()
+    ver_key = sig_key * G.generator()
+
     message = b"Hello World!"
 
-    iv ,ciphertext, tag, pub_enc, signature = dh_encrypt(pub, message)
+    
+    iv ,ciphertext, tag, pub_enc, signature = dh_encrypt(pub, message,
+                                                         sig_key)
     ciphertext = (iv, ciphertext, tag, pub_enc, signature, G)
-    decrypted_message,signature  = dh_decrypt(priv, ciphertext)
+    decrypted_message,signature  = dh_decrypt(priv, ciphertext, ver_key)
 
     assert len(iv) == 16
     assert len(tag) == 16
@@ -379,7 +388,51 @@ def test_decrypt():
     assert signature
 
 def test_fails():
-    assert True
+    from pytest import raises
+
+    from os import urandom
+    G, priv, pub = dh_get_key()
+    sig_key = G.order().random()
+    ver_key = sig_key * G.generator()
+    message = b"Hello World!"
+
+    iv , ciphertext, tag, pub_enc, signature = dh_encrypt(pub,
+                                                          message, sig_key)
+    print type(signature)
+
+    with raises(Exception) as excinfo:
+        # Add 7 to the private key to ensure it's invalid
+        dh_decrypt(priv+7, (iv, ciphertext, tag, pub_enc,
+                                 signature, G), ver_key)
+    assert 'decryption failed' in str(excinfo.value)
+ 
+    with raises(Exception) as excinfo:
+        ## Adding arbritrary values to iv to ensure decryption fails
+        dh_decrypt(priv, ([chr(ord(x)+3) for x in iv], ciphertext,
+                          tag, pub_enc, signature), ver_key)
+    assert 'decryption failed' in str(excinfo.value)
+
+    with raises(Exception) as excinfo:
+        ## Concat to ciphertext to ensure decryption fails
+        dh_decrypt(priv, (iv, ciphertext+"d", tag, pub_enc,
+                          signature,G), ver_key)
+    assert 'decryption failed' in str(excinfo.value)
+
+    
+    with raises(Exception) as excinfo:
+        ## Add to public key to ensure decryption fails
+        dh_decrypt(priv, (iv, ciphertext, tag, pub_enc+88, signature),
+                   ver_key        )
+    assert 'EC exception' in str(excinfo.value)
+
+
+    print type(signature)
+    with raises(Exception) as excinfo:
+        ## Adding arbritrary values to signature to make verification fail
+        dh_decrypt(priv, (iv, ciphertext, tag, pub_enc,
+                          (signature[0]+44, signature[1]-44)), ver_key)
+    assert 'Signature not valid' in str(excinfo.value)
+
 
 
 #####################################################
@@ -414,6 +467,9 @@ def time_scalar_mul():
     t2 = time.clock()
     runtime = t2-t1
     print(runtime)
-    
 
+
+test_encrypt()
+test_decrypt()
+test_fails()
 time_scalar_mul()
