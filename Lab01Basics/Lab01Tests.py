@@ -360,7 +360,7 @@ def test_dh_decrypt():
 
     iv ,ciphertext, tag, pub_enc, signature = dh_encrypt(pub, message,
                                                          sig_key)
-    ciphertext = (iv, ciphertext, tag, pub_enc, signature, G)
+    ciphertext = (iv, ciphertext, tag, pub_enc, signature)
     decrypted_message,signature  = dh_decrypt(priv, ciphertext, ver_key)
 
     assert len(iv) == 16

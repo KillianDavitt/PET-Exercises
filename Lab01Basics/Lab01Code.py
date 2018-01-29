@@ -1,3 +1,4 @@
+# Killian Davitt, Amer Joudiah
 #####################################################
 # GA17 Privacy Enhancing Technologies -- Lab 01
 #
@@ -114,10 +115,6 @@ def point_add(a, b, p, x0, y0, x1, y1):
     ## Curve: y^2 = x^3 + ax + b
     
     # ADD YOUR CODE BELOW
-    #assert isinstance(x0, Bn)
-    #assert isinstance(x1, Bn)
-    #assert isinstance(y0, Bn)
-    #assert isinstance(y1, Bn)
     assert isinstance(p, Bn) and p > 0
     assert Bn.is_prime(p)
 
@@ -157,11 +154,11 @@ def point_double(a, b, p, x, y):
     Returns the point representing the double of the input (x, y).
     """  
     assert Bn.is_prime(p)
-    
+   
+    # Point at infinity 
     if x is None and y is None:
         return (None, None)
     
-    # ADD YOUR CODE BELOW
     xr, yr = None, None
     lam = ((3 * (x*x) + a) * Bn.mod_inverse((2 * y),p)) % p
     xr = ((lam * lam) -2 * x) % p 
@@ -182,12 +179,16 @@ def point_scalar_multiplication_double_and_add(a, b, p, x, y, scalar):
         return Q
 
     """
+    assert Bn.is_prime(p)
     Q = (None, None)
     P = (x, y)
 
     for i in range(scalar.num_bits()):
         if scalar.is_bit_set(i):
             Q = point_add(a, b, p, P[0], P[1], Q[0], Q[1])
+        else:
+            # Wasteful point addition, added to prevent side channel attack
+            W = point_add(a, b, p, P[0], P[1], Q[0], Q[1])
         P = point_double(a,b,p,P[0],P[1])
     return Q
 
@@ -248,23 +249,20 @@ def ecdsa_key_gen():
 
 def ecdsa_sign(G, priv_sign, message):
     """ Sign the SHA256 digest of the message using ECDSA and return a signature """
+
     plaintext =  message.encode("utf8")
-    ## YOUR CODE HERE
-
     digest = sha256(plaintext).digest()
-
-
     sig = do_ecdsa_sign(G, priv_sign, digest)
+
     return sig
 
 
 def ecdsa_verify(G, pub_verify, message, sig):
     """ Verify the ECDSA signature on the message """
     plaintext =  message.encode("utf8")
-    ## YOUR CODE HERE
     digest = sha256(plaintext).digest()
-
     res = do_ecdsa_verify(G, pub_verify, sig, digest)
+
     return res
 
 #####################################################
@@ -296,10 +294,12 @@ def dh_encrypt(pub, message, aliceSig = None):
 
     ## Step 2. Create new Shared Key
     shared_key = pub.pt_mul(priv_dec)
+    
     #change it to bits using export()
     shared_key = shared_key.export()
     digest_of_key = sha256(shared_key).digest() #too big
     digest_of_key = digest_of_key[:16]
+    
     ## Step 3. Encrypt message with AES_GCM
     iv,ciphertext,tag = encrypt_message(digest_of_key,message)
 
@@ -320,17 +320,17 @@ def dh_decrypt(priv, ciphertext_and_pub, aliceVer = None):
     G = EcGroup()
     
     # Ciphertext_and_pub should be a 5-tuple of iv, c, tag, public_key, signature 
+ 
     shared_key = ciphertext_and_pub[3].pt_mul(priv)
     #change it to bits using export()
     shared_key = shared_key.export()
     
-    ##decrypt_message(K, iv, ciphertext, tag):
-    digest_of_key = sha256(shared_key).digest() #too big
+    ## decrypt_message(K, iv, ciphertext, tag):
+    digest_of_key = sha256(shared_key).digest() # reduce size of hash
     digest_of_key = digest_of_key[:16]
-    plaintext = decrypt_message(digest_of_key,ciphertext_and_pub[0],ciphertext_and_pub[1],ciphertext_and_pub[2])
-     
 
-    #ecdsa_verify(G, pub_verify, message, signature):
+    plaintext = decrypt_message(digest_of_key,ciphertext_and_pub[0],ciphertext_and_pub[1],ciphertext_and_pub[2])
+
 
     if aliceVer is not None: 
         result = ecdsa_verify(G, aliceVer, plaintext, ciphertext_and_pub[4])
@@ -338,6 +338,7 @@ def dh_decrypt(priv, ciphertext_and_pub, aliceVer = None):
             raise Exception("Signature not valid")
     else:
         result = None
+
     return (plaintext,result)
 
 
@@ -349,8 +350,6 @@ def dh_decrypt(priv, ciphertext_and_pub, aliceVer = None):
 
 def test_encrypt():
     from os import urandom
-
-
     
     G, priv, pub = dh_get_key()
     sig_key = G.order().random()
@@ -388,6 +387,7 @@ def test_decrypt():
     assert signature
 
 def test_fails():
+
     from pytest import raises
 
     from os import urandom
@@ -398,41 +398,38 @@ def test_fails():
 
     iv , ciphertext, tag, pub_enc, signature = dh_encrypt(pub,
                                                           message, sig_key)
-    print type(signature)
+    
 
     with raises(Exception) as excinfo:
         # Add 7 to the private key to ensure it's invalid
-        dh_decrypt(priv+7, (iv, ciphertext, tag, pub_enc,
-                                 signature, G), ver_key)
+        dh_decrypt(priv+7, (iv, ciphertext, tag, pub_enc, signature), ver_key)
     assert 'decryption failed' in str(excinfo.value)
  
     with raises(Exception) as excinfo:
         ## Adding arbritrary values to iv to ensure decryption fails
-        dh_decrypt(priv, ([chr(ord(x)+3) for x in iv], ciphertext,
-                          tag, pub_enc, signature), ver_key)
+        dh_decrypt(priv, ([chr(ord(x)+3) for x in iv if ord(x)<200],
+                          ciphertext, tag, pub_enc, signature), ver_key)
     assert 'decryption failed' in str(excinfo.value)
 
     with raises(Exception) as excinfo:
         ## Concat to ciphertext to ensure decryption fails
         dh_decrypt(priv, (iv, ciphertext+"d", tag, pub_enc,
-                          signature,G), ver_key)
+                          signature), ver_key)
     assert 'decryption failed' in str(excinfo.value)
 
     
     with raises(Exception) as excinfo:
         ## Add to public key to ensure decryption fails
         dh_decrypt(priv, (iv, ciphertext, tag, pub_enc+88, signature),
-                   ver_key        )
+ver_key        )
     assert 'EC exception' in str(excinfo.value)
 
 
-    print type(signature)
     with raises(Exception) as excinfo:
         ## Adding arbritrary values to signature to make verification fail
         dh_decrypt(priv, (iv, ciphertext, tag, pub_enc,
                           (signature[0]+44, signature[1]-44)), ver_key)
     assert 'Signature not valid' in str(excinfo.value)
-
 
 
 #####################################################
@@ -445,28 +442,49 @@ def test_fails():
 #           - Print reports on timing dependencies on secrets.
 #           - Fix one implementation to not leak information.
 
+
 def time_scalar_mul():
+    # setup curve 
     G = EcGroup(713) # NIST curve
     d = G.parameters()
     a, b, p = d["a"], d["b"], d["p"]
     g = G.generator()
     gx0, gy0 = g.get_affine()
-    r = G.order().random()
+    order = G.order()
+    
+    r = order.random()
 
     gx2, gy2 = (r*g).get_affine()
 
+    # First a value with low hamming weight
+    scalar_1 = Bn.from_hex('11111111111111111111111111111111111111111')
+
+    # The second scalar value with a much higher hamming weight
+    scalar_2 = Bn.from_hex('FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF')
+    # Scalar values with higher hamming weight will take longer to
+    # compute the multiplication of.
     t1 = time.clock()
-    x2, y2 = point_scalar_multiplication_double_and_add(a, b, p, gx0, gy0, r)
+    x2, y2 = point_scalar_multiplication_double_and_add(a, b, p, gx0,
+                                                        gy0, scalar_1)
     t2 = time.clock()
     runtime = t2-t1
-    print(runtime)
+    print("Runtime for scalar 1: " + str(runtime))
 
 
     t1 = time.clock()
-    x2, y2 = point_scalar_multiplication_double_and_add(a, b, p, gx0, gy0, r)
+    x2, y2 = point_scalar_multiplication_double_and_add(a, b, p, gx0, gy0, scalar_2)
     t2 = time.clock()
     runtime = t2-t1
-    print(runtime)
+    print("Runtime for scalar 2: " + str(runtime))
+
+        
+    ## There is an effective side channel attack when using double and
+    ## add ec algorithm (without the fix I have applied) if an attacker can
+    ## observe the time taken for different multiplications. They can
+    ## determine which of the private keys has higher hamming
+    ## weight. This is of course, not a full leakage of the key but it
+    ## is a leakage nonetheless
+    ## This leakage does not occur with montgomerry ladder multiplication
 
 
 test_encrypt()

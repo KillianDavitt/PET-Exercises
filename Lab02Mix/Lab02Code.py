@@ -20,6 +20,7 @@ from collections import namedtuple
 from hashlib import sha512
 from struct import pack, unpack
 from binascii import hexlify
+from os import urandom
 
 def aes_ctr_enc_dec(key, iv, input):
     """ A helper function that implements AES Counter (CTR) Mode encryption and decryption. 
@@ -132,8 +133,32 @@ def mix_client_one_hop(public_key, address, message):
     private_key = G.order().random()
     client_public_key  = private_key * G.generator()
 
-    ## ADD CODE HERE
+    #####
 
+    shared_key = public_key.pt_mul(private_key)
+    shared_key = shared_key.export()
+    digest_of_key = sha512(shared_key).digest() 
+
+    hmac_key = digest_of_key[:16]
+    address_key = digest_of_key[16:32]
+    message_key = digest_of_key[32:48]
+    
+    iv = b"\x00"*16
+    
+    message_cipher = aes_ctr_enc_dec(message_key, iv,
+    message_plaintext)
+    
+    address_cipher = aes_ctr_enc_dec(address_key, iv,
+    address_plaintext)
+
+    
+    h = Hmac(b"sha512", hmac_key)
+    h.update(address_cipher)
+    h.update(message_cipher)
+
+    expected_mac = h.digest()[:20]
+
+    
     return OneHopMixMessage(client_public_key, expected_mac, address_cipher, message_cipher)
 
     
@@ -194,10 +219,11 @@ def mix_server_n_hop(private_key, message_list, final=False):
 
         ## Check the HMAC
         h = Hmac(b"sha512", hmac_key)
-
+        #print hexlify(hmac_key)
         for other_mac in msg.hmacs[1:]:
             h.update(other_mac)
 
+        print hexlify(msg.message)
         h.update(msg.address)
         h.update(msg.message)
 
@@ -261,8 +287,60 @@ def mix_client_n_hop(public_keys, address, message):
     private_key = G.order().random()
     client_public_key  = private_key * G.generator()
 
+    iv = b"\x00"*16
+    
     ## ADD CODE HERE
+    message_cipher = None
+    hmacs = []
 
+    shared_key = public_keys[0].pt_mul(private_key)
+    shared_key = shared_key.export()
+    key_digest = sha512(shared_key).digest()
+    
+    hmac_key = key_digest[:16]
+    address_key = key_digest[16:32]
+    message_key = key_digest[32:48]
+    
+    message_cipher = aes_ctr_enc_dec(message_key, iv, message_plaintext)
+    address_cipher = aes_ctr_enc_dec(address_key, iv,
+                                     address_plaintext)
+    
+    h = Hmac(b"sha512", hmac_key)
+    #    print hmac_key
+    h.update(address_cipher)
+   
+    
+    h.update(message_cipher)
+    next_hmac = h.digest()[:20]
+    hmacs.append(next_hmac)
+    
+    for i, pub in enumerate(public_keys[1:]):
+        shared_key = pub.pt_mul(private_key)
+        shared_key = shared_key.export()
+        key_digest = sha512(shared_key).digest()
+
+        hmac_key = key_digest[:16]
+        address_key = key_digest[16:32]
+        message_key = key_digest[32:48]
+
+        message_cipher = aes_ctr_enc_dec(message_key, iv, message_cipher)
+        address_cipher = aes_ctr_enc_dec(address_key, iv,
+                                         address_cipher)
+
+        h = Hmac(b"sha512", hmac_key)
+
+        for old_macs in hmacs:
+            h.update(old_macs)
+            hmac_enc = aes_ctr_enc_dec(hmac_key, iv, next_hmac)
+        h.update(address_cipher)
+        h.update(message_cipher)
+        next_hmac = h.digest()[:20]
+        iv = pack("H14s", i, b"\x00"*14)
+        
+
+        
+        hmacs.append(hmac_enc)
+    print hexlify(message_cipher)
     return NHopMixMessage(client_public_key, hmacs, address_cipher, message_cipher)
 
 
