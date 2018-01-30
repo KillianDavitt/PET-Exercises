@@ -216,10 +216,12 @@ def mix_server_n_hop(private_key, message_list, final=False):
         # Extract a blinding factor for the public_key
         blinding_factor = Bn.from_binary(key_material[48:])
         new_ec_public_key = blinding_factor * msg.ec_public_key
-
+        #### Key material changes every time...soo each successive
+        #### node has key*r... 
+        
         ## Check the HMAC
         h = Hmac(b"sha512", hmac_key)
-        #print hexlify(hmac_key)
+       
         for other_mac in msg.hmacs[1:]:
             h.update(other_mac)
 
@@ -288,60 +290,103 @@ def mix_client_n_hop(public_keys, address, message):
     client_public_key  = private_key * G.generator()
 
     iv = b"\x00"*16
-    
-    ## ADD CODE HERE
-    message_cipher = None
-    hmacs = []
 
-    shared_key = public_keys[0].pt_mul(private_key)
-    shared_key = shared_key.export()
-    key_digest = sha512(shared_key).digest()
-    
-    hmac_key = key_digest[:16]
-    address_key = key_digest[16:32]
-    message_key = key_digest[32:48]
-    
-    message_cipher = aes_ctr_enc_dec(message_key, iv, message_plaintext)
-    address_cipher = aes_ctr_enc_dec(address_key, iv,
-                                     address_plaintext)
-    
-    h = Hmac(b"sha512", hmac_key)
-    #    print hmac_key
-    h.update(address_cipher)
-   
-    
-    h.update(message_cipher)
-    next_hmac = h.digest()[:20]
-    hmacs.append(next_hmac)
-    
-    for i, pub in enumerate(public_keys[1:]):
+    message_ciphers = []
+    address_ciphers = []
+    for i, pub in enumerate(public_keys):
         shared_key = pub.pt_mul(private_key)
+        
         shared_key = shared_key.export()
         key_digest = sha512(shared_key).digest()
 
-        hmac_key = key_digest[:16]
         address_key = key_digest[16:32]
         message_key = key_digest[32:48]
 
-        message_cipher = aes_ctr_enc_dec(message_key, iv, message_cipher)
-        address_cipher = aes_ctr_enc_dec(address_key, iv,
-                                         address_cipher)
+        if i==0:
+            message_cipher = aes_ctr_enc_dec(message_key, iv, message_plaintext)
+            address_cipher = aes_ctr_enc_dec(address_key, iv,
+                                     address_plaintext)
+        else:
+            message_cipher = aes_ctr_enc_dec(message_key, iv, message_ciphers[i-1])
+            address_cipher = aes_ctr_enc_dec(address_key, iv,
+                                             address_ciphers[i-1])
+        message_ciphers.append(message_cipher)
+        address_ciphers.append(address_cipher)
 
+    message_ciphers.reverse()
+    address_ciphers.reverse()
+    # Blinding factor, shared keys must be multiplied by blinding
+    # factor b times if it is the b'th hop.
+    ## Blinding factor is the priv key of hop times pub key of next hop.....
+    blinding_factor = Bn.from_binary(key_digest[48:])
+    # this is the orignal blinding factor, between the client and
+    # hop1.
+    # What will be the blinding factor that hop1 makes?
+    # new_pubkey = blinding_factor * pubkey
+    # then:
+    # next hop:
+    # new_pubkey = blinding_factor * pubkey
+    # whats blinding factor?
+    # material from the shared key
+    # shared_key is pub of hop2 * cli_priv
+    # 
+    hmacs = []
+
+    # Before doing hmacs, caluculate the blinding factor of all the
+    # hops, can't be done during hmacs as it's in a different order.
+    blind_factors = []
+    for i,k in enumerate(public_keys):
+        if i == 0:
+            blind_factors.append(0)
+            continue
+
+        pub_key = public_keys[i-1]
+
+        # The shared key that the hop will use to calculate the factor
+        shared_key = pub_key.pt_mul(private_key)        
+        shared_key = shared_key.export()
+        key_digest = sha512(shared_key).digest()
+        # the blinding factor that they will use
+        blinding_factor = Bn.from_binary(key_digest[48:])
+        blind_factors.append(blinding_factor)
+    
+    ## Must do the hmacs in reverse order as the first hmacs depend on
+    # the value of the previous hmacs.
+    public_keys.reverse()
+    blind_factors.reverse()
+
+    for i,k in enumerate(public_keys):
+        j = len(public_keys) - i
+        ## The shared key of the n-i'th key is priv key times pubkey
+        ## times blinding factor ^ n-i
+        ## Need previous shared key
+        
+        shared_key = k.pt_mul(private_key)
+        for f in blind_factors[i:]:
+            shared_key = shared_key.pt_mul(f)
+
+        shared_key = shared_key.export()
+        key_digest = sha512(shared_key).digest()
+    
+        hmac_key = key_digest[:16]
         h = Hmac(b"sha512", hmac_key)
 
-        for old_macs in hmacs:
-            h.update(old_macs)
-            hmac_enc = aes_ctr_enc_dec(hmac_key, iv, next_hmac)
-        h.update(address_cipher)
-        h.update(message_cipher)
-        next_hmac = h.digest()[:20]
-        iv = pack("H14s", i, b"\x00"*14)
+        for old_mac in hmacs:
+            h.update(old_mac)
+        h.update(address_ciphers[i])
+        h.update(message_ciphers[i])
+        new_mac = h.digest()
+        hmacs.append(new_mac[:20])
+            
+        for k, mac in enumerate(hmacs):
+            iv = pack("H14s", k, b"\x00"*14)
+            aes_ctr_enc_dec(hmac_key, iv, mac)
         
 
-        
-        hmacs.append(hmac_enc)
+
+    hmacs.reverse()
     print hexlify(message_cipher)
-    return NHopMixMessage(client_public_key, hmacs, address_cipher, message_cipher)
+    return NHopMixMessage(client_public_key, hmacs, address_ciphers[0], message_ciphers[0])
 
 
 
@@ -405,3 +450,33 @@ def analyze_trace(trace, target_number_of_friends, target=0):
 
 """ TODO: Your answer HERE """
 
+
+
+'''
+SCRATCH:
+
+hmac2 += mac(addr)
+hmac2 += mac(mesg)
+(enc(hmac2))
+iv = pack("H14s", 0, b"\x00"*14)
+
+///
+
+hmac1 += mac(hmac2)
+hmac1 += mac(addr)
+hmac1 += mac(mesg)
+enc(hmac2)
+enc(hmac1)
+
+///
+
+hmac0 += mac(hmac1)
+hmac0 += mac(hmac2)
+hmac0 += mac(addr)
+hmac0 += mac(mesg)
+enc(hmac2)
+enc(hmac1)
+enc(hmac0)
+
+
+'''
