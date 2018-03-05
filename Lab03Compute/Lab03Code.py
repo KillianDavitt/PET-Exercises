@@ -32,6 +32,8 @@ def keyGen(params):
    (G, g, h, o) = params
    
    # ADD CODE HERE
+   priv = G.order().random()
+   pub = priv * g
 
    return (priv, pub)
 
@@ -41,6 +43,9 @@ def encrypt(params, pub, m):
         raise Exception("Message value to low or high.")
 
    # ADD CODE HERE
+    (G, g, h, o) = params
+    k = o.random()
+    c = (k * g, k * pub + m * h)
 
     return c
 
@@ -76,6 +81,8 @@ def decrypt(params, priv, ciphertext):
     a , b = ciphertext
 
    # ADD CODE HERE
+    (G, g, h, o) = params
+    hm = (b + (priv * a).pt_neg())
 
     return logh(params, hm)
 
@@ -91,7 +98,10 @@ def add(params, pub, c1, c2):
     assert isCiphertext(params, c1)
     assert isCiphertext(params, c2)
 
-   # ADD CODE HERE
+    # ADD CODE HERE
+    a1 , b1 = c1
+    a2 , b2 = c2
+    c3 = a1 + a2, b1 + b2 
 
     return c3
 
@@ -100,7 +110,9 @@ def mul(params, pub, c1, alpha):
         product of the plaintext time alpha """
     assert isCiphertext(params, c1)
 
-   # ADD CODE HERE
+    # ADD CODE HERE
+    a1 , b1 = c1
+    c3 = a1.pt_mul(alpha), b1.pt_mul(alpha)
 
     return c3
 
@@ -113,7 +125,10 @@ def groupKey(params, pubKeys=[]):
     """ Generate a group public key from a list of public keys """
     (G, g, h, o) = params
 
-   # ADD CODE HERE
+    # ADD CODE HERE
+    pub = pubKeys[0]
+    for i in range(1,len(pubKeys)):
+        pub = pub + pubKeys[i]
 
     return pub
 
@@ -123,6 +138,9 @@ def partialDecrypt(params, priv, ciphertext, final=False):
     assert isCiphertext(params, ciphertext)
     
     # ADD CODE HERE
+    (G, g, h, o) = params
+    a1 , b1 =ciphertext
+    b1 = (b1 + (priv * a1).pt_neg())
 
     if final:
         return logh(params, b1)
@@ -142,7 +160,10 @@ def corruptPubKey(params, priv, OtherPubKeys=[]):
         corrupt authority. """
     (G, g, h, o) = params
     
-   # ADD CODE HERE
+    # ADD CODE HERE
+    pub = priv * g
+    for i in range(0,len(OtherPubKeys)):
+        pub = pub + OtherPubKeys[i].pt_neg()
 
     return pub
 
@@ -157,7 +178,13 @@ def encode_vote(params, pub, vote):
         zero and the votes for one."""
     assert vote in [0, 1]
 
-   # ADD CODE HERE
+    # ADD CODE HERE
+    if (vote==0):
+        v0=encrypt(params, pub, 1)
+        v1=encrypt(params, pub, 0)
+    if (vote==1):
+        v0=encrypt(params, pub, 0)
+        v1=encrypt(params, pub, 1)
 
     return (v0, v1)
 
@@ -166,8 +193,15 @@ def process_votes(params, pub, encrypted_votes):
         to sum votes for zeros and votes for ones. """
     assert isinstance(encrypted_votes, list)
     
-   # ADD CODE HERE
-
+    # ADD CODE HERE
+    tv0=encrypted_votes[0][0]
+    tv1=encrypted_votes[0][1]
+    for i in range (1,len(encrypted_votes)):
+        v0=encrypted_votes[i][0]
+        v1=encrypted_votes[i][1]
+        tv0 = add(params, pub, tv0, v0)
+        tv1 = add(params, pub, tv1, v1)
+            
     return tv0, tv1
 
 def simulate_poll(votes):
