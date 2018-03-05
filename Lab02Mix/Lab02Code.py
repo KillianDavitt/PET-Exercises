@@ -306,31 +306,29 @@ def mix_client_n_hop(public_keys, address, message):
             pub_key = public_keys[i-1]
 
             # The shared key that the hop will use to calculate the factor
-                
             shared_key = shared_keys[i-1]
             key_digest = sha512(shared_key).digest()
             # the blinding factor that they will use
             blinding_factor = Bn.from_binary(key_digest[48:])
-            #blinding_factor *= blind_factors[i-1]
             blind_factors.append(blinding_factor)
 
         shared_key = public_keys[i].pt_mul(private_key)
         for j, fac in enumerate(blind_factors[0:i+1]):
-                        shared_key = shared_key.pt_mul(blind_factors[j])
+            shared_key = shared_key.pt_mul(blind_factors[j])
         shared_key = shared_key.export()
         shared_keys.append(shared_key)
 
-    
-    
-
+    ## Reverse the key lists, since we will compute hmacs in reverse order
     shared_keys.reverse()
     public_keys.reverse()
 
     message_ciphers = []
     address_ciphers = []
     hmacs = []
+    
     previous_hmac_key = None
     for i, pub in enumerate(public_keys):
+        # Get shared key from precomputed list 
         shared_key = shared_keys[i]
         key_digest = sha512(shared_key).digest()
         address_key = key_digest[16:32]
@@ -352,14 +350,14 @@ def mix_client_n_hop(public_keys, address, message):
         ## 2. Encrypt the old HMACs
         for q, mac in enumerate(hmacs):
             iv = pack("H14s", len(hmacs)-q-1, b"\x00"*14)
-
             hmacs[q] = aes_ctr_enc_dec(hmac_key, iv, mac)
 
         previous_hmac_key = hmac_key
 
         ## 3. Compute the new HMAC
         h = Hmac(b"sha512", hmac_key)
- 
+
+        ## Iterate backwards through the previous hmacs
         for old_mac in hmacs[::-1]:
             h.update(old_mac)
         h.update(address_ciphers[i])
@@ -420,16 +418,22 @@ def analyze_trace(trace, target_number_of_friends, target=0):
     return the list of receiver identifiers that are the most likely 
     friends of the target.
     """
+
+    # Remove all traces that the target doesn't send in
     for t in trace:
         if target not in t[0]:
             trace.remove(t)
 
     c = Counter(trace[0][0])
 
+
+    ## iterate traces, if a receiver received when target was sending,
+    ## increment count
     for t in trace:
         for i in t[1]:
             c[i] += 1
 
+    # Get most common friends and return
     q = (c.most_common(target_number_of_friends))
     q = [x[0] for x in q] 
     return q
@@ -440,14 +444,23 @@ def analyze_trace(trace, target_number_of_friends, target=0):
 """ 
 
 Since for every message sent to the mix, the client generates a new
+private key. Since the symmetric shared key is derived from the
 private key, every message will look different, so there is no need to
 introduce a random IV.
 
 The purpose of an initialisation vector is to prevent the exact same
 message from encrypting to the same ciphertext, if it is encrypted on
-two seperate occasions. but, if the private key is different every
+two seperate occasions. but, if the  key is different every
 time, the plaintexts will differ completely anyway, so there is no
 need for an IV.
+
+We can see on line 291 of this file that the client gets a random
+private key each time. (This is okay as there is no need for the
+client to authenticate itself to the servers.)
+
+furthermore as long as there is a changing counter (which there is in counter mode), the
+subsequent blocks of the cipher will not encrypt to the same value so
+this is not an additional concern introduced by zero iv's.
 
 """
 
@@ -457,16 +470,16 @@ need for an IV.
 #                        makes about the distribution of traffic from non-target senders to receivers? Is
 #                        the correctness of the result returned dependent on this background distribution?
 
-"""  
-The assumption is made that non-target senders, do not send data to
+"""The assumption is made that non-target senders, do not send data to
 the targets friends. 
 
-The attack is based on the fact that it is more likely that friends
-will appear in the same trace as the target. If, for most traces where
-the target sends, particular receivers occur often, they are likely to
-be friends, so, if, in traces where the target sends, The worst
-possibility is that other non friends are found to be equally likely
-to be the friends of the target.
+The attack is based on the fact that it is more likely that friends of
+the target will appear as receivers in the same trace as the target is
+sending. If, for most traces where the target sends, particular
+receivers occur often, they are likely to be friends, so, if, in
+traces where the target sends, the worst possibility is that other non
+friends are found to be equally likely to be the friends of the
+target.
 
 It also makes the assumption that, every other sender is not sending a
 message at the same time as the target. If, at every time the target
