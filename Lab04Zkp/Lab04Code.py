@@ -52,6 +52,10 @@ def proveKey(params, priv, pub):
     (G, g, hs, o) = params
     
     ## YOUR CODE HERE:
+    w = o.random()
+    W = w*g
+    c=to_challenge([g, W]) 
+    r = (w-c*priv)% o
     
     return (c, r)
 
@@ -62,6 +66,7 @@ def verifyKey(params, pub, proof):
     (G, g, hs, o) = params
     c, r = proof
     gw_prime  = c * pub + r * g 
+   
     return to_challenge([g, gw_prime]) == c
 
 #####################################################
@@ -92,7 +97,23 @@ def proveCommitment(params, C, r, secrets):
     x0, x1, x2, x3 = secrets
 
     ## YOUR CODE HERE:
-
+    w0 = o.random()
+    w1 = o.random()
+    w2 = o.random()
+    w3 = o.random()
+    wr = o.random()
+    
+    W = w0*h0+w1*h1+w2*h2+w3*h3+wr*g
+    c = to_challenge([g, h0, h1, h2, h3, W])
+    
+    r0=w0-c*x0
+    r1=w1-c*x1
+    r2=w2-c*x2
+    r3=w3-c*x3
+    rr=wr-c*r
+    
+    responses = (r0,r1,r2,r3,rr)
+    
     return (c, responses)
 
 def verifyCommitments(params, C, proof):
@@ -139,8 +160,10 @@ def verifyDLEquality(params, K, L, proof):
     c, r = proof
 
     ## YOUR CODE HERE:
-
-    return # YOUR RETURN HERE
+    Kw_prime = c*K+r*g
+    Lw_prime = c*L+r*h0
+    
+    return to_challenge([g,h0,Kw_prime,Lw_prime]) == c
 
 #####################################################
 # TASK 4 -- Prove correct encryption and knowledge of 
@@ -155,8 +178,8 @@ def encrypt(params, pub, m):
     return k, (k * g, k * pub + m * h0)
 
 def proveEnc(params, pub, Ciphertext, k, m):
-    """ Prove in ZK that the ciphertext is well formed 
-        and knowledge of the message encrypted as well.
+    """ Prove in ZK that the ciphertext is well formed #jo multiple encryption
+        and knowledge of the message encrypted as well. #jo equality
 
         Return the proof: challenge and the responses.
     """ 
@@ -164,7 +187,17 @@ def proveEnc(params, pub, Ciphertext, k, m):
     a, b = Ciphertext
 
     ## YOUR CODE HERE:
+    w1 = o.random()
+    w2 = o.random()
+    
+    W1 = w1*g
+    W2 = w1*pub+w2*h0
 
+    c = to_challenge([g, h0, pub, W1,W2])
+    
+    rk = w1-c*k
+    rm = w2-c*m
+       
     return (c, (rk, rm))
 
 def verifyEnc(params, pub, Ciphertext, proof):
@@ -174,9 +207,10 @@ def verifyEnc(params, pub, Ciphertext, proof):
     (c, (rk, rm)) = proof
 
     ## YOUR CODE HERE:
-
-    return ## YOUR RETURN HERE
-
+    W1 = c*a+rk*g
+    W2 = c*b+rk*pub+rm*h0
+    
+    return to_challenge([g,h0,pub,W1,W2]) == c
 
 #####################################################
 # TASK 5 -- Prove a linear relation
@@ -199,16 +233,27 @@ def prove_x0eq10x1plus20(params, C, x0, x1, r):
     (G, g, (h0, h1, h2, h3), o) = params
 
     ## YOUR CODE HERE:
-
-    return ## YOUR RETURN HERE
+    
+    w1 = o.random()
+    wr = o.random()
+ 
+    W = w1*h1+w1*10*h0+wr*g
+    c = to_challenge([g, h1, h0, W])
+     
+    r1 = w1-c*x1
+    rr = wr-c*r
+   
+    return (c, (r1,rr))
 
 def verify_x0eq10x1plus20(params, C, proof):
     """ Verify that proof of knowledge of C and x0 = 10 x1 + 20. """
     (G, g, (h0, h1, h2, h3), o) = params
 
     ## YOUR CODE HERE:
-
-    return ## YOUR RETURN HERE
+    c,(r1,rr)=proof 
+    W = r1*h1+r1*10*h0+rr*g+c*(C-20*h0)
+    
+    return  c == to_challenge([g, h1, h0, W])
 
 #####################################################
 # TASK 6 -- (OPTIONAL) Prove that a ciphertext is either 0 or 1
