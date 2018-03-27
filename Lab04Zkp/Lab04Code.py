@@ -7,7 +7,7 @@
 # $ py.test -v test_file_name.py
 
 ###########################
-# Group Members: TODO
+# Group Members: Killian Davitt, Lizhou Feng
 ###########################
 
 from petlib.ec import EcGroup
@@ -298,7 +298,21 @@ def test_bin_incorrect():
 # that  deviates from the Schnorr identification protocol? Justify 
 # your answer by describing what a dishonest verifier may do.
 
-""" TODO: Your answer here. """
+""" TODO: Your answer here.
+
+Plausible deniability does not hold for verifiers that deviate from the
+protocol.
+The most important factor to consider is the random challenge being
+issued. 
+
+#A transcript of the identification protocol simply proves that at some
+#point, someone in possession of the secret value, performed
+#identification with that random challenge. 
+
+I think that potentially if particular values of the challenge were
+issues, like "1" for example.
+
+"""
 
 #####################################################
 # TASK Q2 - Answer the following question:
@@ -311,7 +325,19 @@ def test_bin_incorrect():
 #
 # Hint: Look at "test_prove_something" too.
 
-""" TODO: Your answer here. """
+""" TODO: Your answer here. 
+
+The function proves that the prover knows one of the values, either x
+or y. With the values c1 and c2, the verifier checks if c1 + c2 =
+C. When the verifier checks this, they know that both c1 and c2 are
+correct. Normally this would prove the the prover knew both x and y,
+but... since c1 + c2 = C. It is also true that if the prover knew one
+of either x or y, they could construct the valid value for c1, and
+then set c2 to be C-c1. and vice versa. So, this function proves that
+the prover either knows at least one of x,y. 
+
+
+"""
 
 def prove_something(params, KX, KY, y):
     (G, g, _, o) = params
