@@ -305,12 +305,51 @@ protocol.
 The most important factor to consider is the random challenge being
 issued. 
 
-#A transcript of the identification protocol simply proves that at some
-#point, someone in possession of the secret value, performed
-#identification with that random challenge. 
+The reason plausible deniability holds for honest verifiers, is that
+when a transcript of the protocol is presented to a 3rd party, it is
+entirely possible that the transcript was forged by the verifier. 
 
-I think that potentially if particular values of the challenge were
-issues, like "1" for example.
+A valid transcript of the protocol could be forged by:
+
+1. selecting a random r
+2. selecting a random c
+
+and then,
+
+3. Computing a W from c and r,
+    W = g^r . pub^c
+    
+if this is done, any verifier will consider the forged transcript
+valid. However, since it is known that forgeries are possible, no
+third party will believe that this transcript proves anything.
+
+So, with honest verifiers, The Prover can prove to the verifier that
+they posses the discrete log secret to a given public key. however,
+the verifier then has no ability to prove this to a 3rd party. The
+verifier cannot convince a 3rd party that Bob proved this. 
+
+with a dishonest verifier, this can change. All that is necessary is
+for the verifier to not produce a random challenge, but instead to
+produce a challenge that is dependant on the value of W that the
+prover sends initially. If the value of c is dependant on W. Then, it
+is far more difficult for a verifier to forge transcripts. Since the
+order of steps in forging transcripts requires that c is computed
+before w, if c is dependant on w, it negates the possiblity of forged
+transcripts.
+
+to be more specific, imagine that the prover sends the initial W to
+the verifier. The verifier then computes the challenge as c = H(W)
+where H is a collision resistant hash function. The verifier sends
+this challenge back to the prover and the protocol completes.
+
+As usual, the verifier has a transcript of this protocol, but this
+time, they can convince any 3rd party fully, that Bob did in fact
+prove his knowledge of the discrete log secret. A 3rd party can check
+that c is indeed the hashed value of W, which means it could not have
+been forged. 
+
+Therefore, if a verifier is dishonest, it can mean that plausible
+deniability of the schnorr identification protocol does not hold. 
 
 """
 
@@ -336,6 +375,11 @@ of either x or y, they could construct the valid value for c1, and
 then set c2 to be C-c1. and vice versa. So, this function proves that
 the prover either knows at least one of x,y. 
 
+Indeed, we can see in the proving function that the only reason that
+the prover can produce a valid c2 is by substracting c1 from c. But
+this does not reveal to the verifier whether the prover produced c1
+from a secret and subtracted to find c2, or whether the prover
+produced c2 from a secret and subtracted to find c1.
 
 """
 
